@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal AR.js Test</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+        }
+        #debug {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.5);
+            color: white;
+            padding: 10px;
+            font-family: monospace;
+            z-index: 1000;
+            max-width: 80%;
+            overflow-wrap: break-word;
+        }
+        #cameraButton {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            padding: 10px 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <button id="cameraButton">Start Camera</button>
+    <div id="debug">Debug info will appear here</div>
+
+    <!-- Load A-Frame separately from AR.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.2.0/aframe.min.js"></script>
+    
+    <!-- Basic scene setup without AR initially -->
+    <script>
+        const debugEl = document.getElementById('debug');
+        const cameraButton = document.getElementById('cameraButton');
+        let arScriptLoaded = false;
+        
+        // Log to screen and console
+        function log(message) {
+            console.log(message);
+            debugEl.innerHTML += message + '<br>';
+            // Keep only recent messages
+            const lines = debugEl.innerHTML.split('<br>');
+            if (lines.length > 10) {
+                debugEl.innerHTML = lines.slice(lines.length - 10).join('<br>');
+            }
+        }
+        
+        log('Page loaded. Click "Start Camera" to begin.');
+        
+        // Request camera permissions explicitly before loading AR.js
+        cameraButton.addEventListener('click', function() {
+            log('Requesting camera permission...');
+            
+            // First request camera permission
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(stream) {
+                    log('Camera permission granted!');
+                    
+                    // Stop the test stream
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    // Now load AR.js since we have permission
+                    if (!arScriptLoaded) {
+                        log('Loading AR.js...');
+                        loadARJS();
+                    }
+                })
+                .catch(function(err) {
+                    log('Camera permission denied: ' + err.message);
+                    log('Make sure your browser has camera permissions enabled');
+                });
+        });
+        
+        function loadARJS() {
+            // Create AR.js script
+            const arScript = document.createElement('script');
+            arScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/ar.js/2.2.2/aframe-ar.min.js';
+            arScript.onload = setupAR;
+            arScript.onerror = () => log('Failed to load AR.js script');
+            document.body.appendChild(arScript);
+            arScriptLoaded = true;
+        }
+        
+        function setupAR() {
+            log('AR.js loaded. Setting up AR scene...');
+            
+            // Remove existing scene if any
+            const existingScene = document.querySelector('a-scene');
+            if (existingScene) {
+                existingScene.parentNode.removeChild(existingScene);
+            }
+            
+            // Create minimal AR scene
+            const scene = document.createElement('a-scene');
+            scene.setAttribute('embedded', '');
+            scene.setAttribute('arjs', 'sourceType: webcam; debugUIEnabled: false;');
+            
+            // Create a simple marker
+            const marker = document.createElement('a-marker');
+            marker.setAttribute('preset', 'hiro');
+            
+            // Add a simple box to visualize when marker is detected
+            const box = document.createElement('a-box');
+            box.setAttribute('position', '0 0.5 0');
+            box.setAttribute('color', 'red');
+            
+            // Add elements to scene
+            marker.appendChild(box);
+            scene.appendChild(marker);
+            
+            // Add camera
+            const camera = document.createElement('a-entity');
+            camera.setAttribute('camera', '');
+            scene.appendChild(camera);
+            
+            // Add to document
+            document.body.appendChild(scene);
+            
+            // Setup event listeners
+            marker.addEventListener('markerFound', function() {
+                log('Marker found!');
+            });
+            
+            marker.addEventListener('markerLost', function() {
+                log('Marker lost!');
+            });
+            
+            log('AR scene created. Look for a Hiro marker.');
+            cameraButton.style.display = 'none';
+        }
+    </script>
+</body>
+</html>

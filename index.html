@@ -3,259 +3,278 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR.js Marker-Based Tracking</title>
+    <title>Menu AR Marker Tracking</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
         }
-        .ar-container {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        .ui-container {
+        #debug {
             position: fixed;
-            bottom: 20px;
-            width: 100%;
-            display: flex;
-            justify-content: center;
-            z-index: 10;
-        }
-        .ui-button {
-            background-color: rgba(0, 0, 0, 0.5);
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.5);
             color: white;
-            border: none;
-            padding: 10px 20px;
-            margin: 0 10px;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        .loading-screen {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.8);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
+            padding: 10px;
+            font-family: monospace;
             z-index: 1000;
+            max-width: 80%;
+            overflow-wrap: break-word;
         }
-        .info-box {
+        #cameraButton {
             position: fixed;
             top: 20px;
             left: 50%;
             transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
+            z-index: 1000;
             padding: 10px 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
             border-radius: 5px;
-            z-index: 10;
-            text-align: center;
+        }
+        #ui-container {
+            position: fixed;
+            bottom: 20px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .ui-button {
+            padding: 10px 15px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        #status {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            padding: 10px 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+            display: none;
         }
     </style>
 </head>
 <body>
-    <div class="loading-screen" id="loadingScreen">
-        <h2>Loading AR Experience...</h2>
-        <p>Please allow camera access when prompted</p>
-    </div>
-    <div class="camera-error" id="cameraError">
-        <h2>Camera Access Error</h2>
-        <p>Unable to access your camera. Please ensure you've granted camera permission and are using HTTPS or localhost.</p>
-        <button id="retryButton" style="padding: 10px; margin-top: 15px; background: white; color: black; border: none; border-radius: 5px;">Retry Camera Access</button>
-    </div>
-
-    <div class="info-box" id="infoBox">
-        Point your camera at the marker
-    </div>
+    <button id="cameraButton">Start Camera</button>
+    <div id="status">Searching for menu marker...</div>
+    <div id="debug">Debug info will appear here</div>
     
-    <div class="ar-container">
-        <a-scene 
-            embedded
-            arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; patternRatio: 0.75;"
-            renderer="logarithmicDepthBuffer: true; precision: medium;"
-            vr-mode-ui="enabled: false"
-            loading-screen="enabled: false">
-
-            <!-- Custom marker for the menu using a pattern file -->
-            <a-marker type="pattern" url="./Markers/pattern-trialMenu.patt" id="menuMarker">
-                <!-- 3D model to display (a simple cube for demonstration) -->
-                <a-entity
-                    id="menuModel"
-                    position="0 0.5 0"
-                    scale="0.5 0.5 0.5"
-                    rotation="0 0 0"
-                    gltf-model="./Models/scene.gltf">
-                </a-entity>
-            </a-marker>
-            
-            <!-- Camera element -->
-            <a-entity camera></a-entity>
-        </a-scene>
-    </div>
-    
-    <div class="ui-container">
+    <div id="ui-container">
         <button class="ui-button" id="switchModelBtn">Switch Model</button>
         <button class="ui-button" id="resetBtn">Reset Position</button>
     </div>
+
+    <!-- Load A-Frame separately from AR.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.2.0/aframe.min.js"></script>
     
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.3.0/aframe.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ar.js/2.4.0/aframe-ar.min.js"></script>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // References to UI elements
-            const loadingScreen = document.getElementById('loadingScreen');
-            const infoBox = document.getElementById('infoBox');
-            const cameraError = document.getElementById('cameraError');
-            const retryButton = document.getElementById('retryButton');
-            const switchModelBtn = document.getElementById('switchModelBtn');
-            const resetBtn = document.getElementById('resetBtn');
+        const debugEl = document.getElementById('debug');
+        const cameraButton = document.getElementById('cameraButton');
+        const statusEl = document.getElementById('status');
+        const switchModelBtn = document.getElementById('switchModelBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        
+        let arScriptLoaded = false;
+        let currentModelIndex = 0;
+        let menuEntity = null;
+        
+        // Available 3D models to cycle through
+        const models = [
+            './models/scene.gltf',
+            './models/dish1.glb', 
+            './models/dish2.glb'
+        ];
+        
+        // Log to screen and console
+        function log(message) {
+            console.log(message);
+            debugEl.innerHTML += message + '<br>';
+            // Keep only recent messages
+            const lines = debugEl.innerHTML.split('<br>');
+            if (lines.length > 10) {
+                debugEl.innerHTML = lines.slice(lines.length - 10).join('<br>');
+            }
+        }
+        
+        log('Page loaded. Click "Start Camera" to begin.');
+        
+        // Request camera permissions explicitly before loading AR.js
+        cameraButton.addEventListener('click', function() {
+            log('Requesting camera permission...');
             
-            // Available 3D models to cycle through
-            const models = [
-                './models/menu_model.glb',
-                './models/dish1.glb',
-                './models/dish2.glb'
-            ];
+            // First request camera permission
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(stream) {
+                    log('Camera permission granted!');
+                    
+                    // Stop the test stream
+                    stream.getTracks().forEach(track => track.stop());
+                    
+                    // Now load AR.js since we have permission
+                    if (!arScriptLoaded) {
+                        log('Loading AR.js...');
+                        loadARJS();
+                    }
+                })
+                .catch(function(err) {
+                    log('Camera permission denied: ' + err.message);
+                    log('Make sure your browser has camera permissions enabled');
+                });
+        });
+        
+        function loadARJS() {
+            // Create AR.js script
+            const arScript = document.createElement('script');
+            arScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/ar.js/2.2.2/aframe-ar.min.js';
+            arScript.onload = setupAR;
+            arScript.onerror = () => log('Failed to load AR.js script');
+            document.body.appendChild(arScript);
+            arScriptLoaded = true;
+        }
+        
+        function setupAR() {
+            log('AR.js loaded. Setting up AR scene...');
             
-            let currentModelIndex = 0;
-            let menuMarker = null;
-            let menuModel = null;
-            let fallbackCube = null;
-            let markerVisible = false;
-            let cameraAccessAttempted = false;
-            
-            // Handle camera errors
-            function handleCameraError() {
-                console.error('Camera access failed');
-                loadingScreen.style.display = 'none';
-                cameraError.style.display = 'block';
+            // Remove existing scene if any
+            const existingScene = document.querySelector('a-scene');
+            if (existingScene) {
+                existingScene.parentNode.removeChild(existingScene);
             }
             
-            // Retry camera access
-            retryButton.addEventListener('click', function() {
-                cameraError.style.display = 'none';
-                loadingScreen.style.display = 'flex';
-                
-                // Force reload the page to retry camera access
-                window.location.reload();
-            });
+            // Create minimal AR scene
+            const scene = document.createElement('a-scene');
+            scene.setAttribute('embedded', '');
+            scene.setAttribute('arjs', 'sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; patternRatio: 0.75;');
             
-            // Set a timeout to detect if camera isn't starting
-            const cameraTimeout = setTimeout(() => {
-                if (!cameraAccessAttempted) {
-                    handleCameraError();
+            // Create a marker that uses the menu pattern file
+            const marker = document.createElement('a-marker');
+            marker.setAttribute('type', 'pattern');
+            marker.setAttribute('url', './markers/pattern-trialMenu3.patt');
+            marker.id = 'menuMarker';
+            
+            // Add a fallback cube that will show immediately when marker is detected
+            const cube = document.createElement('a-box');
+            cube.setAttribute('position', '0 0.5 0');
+            cube.setAttribute('color', 'red');
+            cube.setAttribute('scale', '0.5 0.5 0.5');
+            cube.id = 'fallbackCube';
+            
+            // Add a 3D model entity
+            const modelEntity = document.createElement('a-entity');
+            modelEntity.setAttribute('position', '0 0.5 0');
+            modelEntity.setAttribute('scale', '0.5 0.5 0.5');
+            modelEntity.setAttribute('rotation', '0 0 0');
+            modelEntity.id = 'menuModel';
+            
+            // Store reference for later use
+            menuEntity = modelEntity;
+            
+            // Add elements to scene
+            marker.appendChild(cube);
+            marker.appendChild(modelEntity);
+            scene.appendChild(marker);
+            
+            // Add camera
+            const camera = document.createElement('a-entity');
+            camera.setAttribute('camera', '');
+            scene.appendChild(camera);
+            
+            // Add to document
+            document.body.appendChild(scene);
+            
+            // Show status element
+            statusEl.style.display = 'block';
+            
+            // Setup event listeners for marker
+            marker.addEventListener('markerFound', function() {
+                log('Menu marker detected!');
+                statusEl.textContent = 'Menu marker detected!';
+                statusEl.style.backgroundColor = 'rgba(0, 128, 0, 0.7)';
+                
+                // Try to load the model if not already loaded
+                if (!modelEntity.getAttribute('gltf-model')) {
+                    loadModel(models[currentModelIndex]);
                 }
-            }, 5000);
-            
-            // Listen for camera stream success
-            window.addEventListener('camera-init', function() {
-                console.log('Camera initialized successfully');
-                cameraAccessAttempted = true;
-                clearTimeout(cameraTimeout);
             });
             
-            // Listen for camera stream error
-            window.addEventListener('camera-error', function(event) {
-                console.error('Camera error:', event);
-                handleCameraError();
-                clearTimeout(cameraTimeout);
+            marker.addEventListener('markerLost', function() {
+                log('Menu marker lost!');
+                statusEl.textContent = 'Searching for menu marker...';
+                statusEl.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
             });
             
-            // Hide loading screen once everything is loaded
-            window.addEventListener('arjs-video-loaded', function() {
-                console.log('AR.js video loaded');
-                loadingScreen.style.display = 'none';
-                cameraAccessAttempted = true;
-                clearTimeout(cameraTimeout);
-            });
+            log('AR scene created. Look for your menu marker.');
+            cameraButton.style.display = 'none';
             
-            // Wait for the scene to load
-            document.querySelector('a-scene').addEventListener('loaded', function() {
-                console.log('AR.js scene loaded');
-                menuMarker = document.getElementById('menuMarker');
-                menuModel = document.getElementById('menuModel');
-                fallbackCube = document.getElementById('fallbackCube');
+            // Load the initial model
+            loadModel(models[currentModelIndex]);
+        }
+        
+        function loadModel(modelUrl) {
+            if (!menuEntity) return;
+            
+            log('Loading model: ' + modelUrl);
+            
+            // Show loading state
+            const fallbackCube = document.getElementById('fallbackCube');
+            if (fallbackCube) {
+                fallbackCube.setAttribute('visible', 'true');
+            }
+            
+            try {
+                menuEntity.setAttribute('gltf-model', modelUrl);
                 
-                // Try to load the first model
-                try {
-                    menuModel.setAttribute('gltf-model', models[0]);
-                    // Hide the cube once the model loads
-                    menuModel.addEventListener('model-loaded', function() {
-                        console.log('Model loaded successfully');
-                        menuModel.setAttribute('visible', 'true');
+                // Handle model load success
+                menuEntity.addEventListener('model-loaded', function modelLoadHandler() {
+                    log('Model loaded successfully');
+                    if (fallbackCube) {
                         fallbackCube.setAttribute('visible', 'false');
-                    });
-                    // Show cube if model fails to load
-                    menuModel.addEventListener('model-error', function(e) {
-                        console.error('Model failed to load:', e);
+                    }
+                    // Remove event listener to prevent multiple calls
+                    menuEntity.removeEventListener('model-loaded', modelLoadHandler);
+                });
+                
+                // Handle model load error
+                menuEntity.addEventListener('model-error', function modelErrorHandler(e) {
+                    log('Error loading model: ' + e.detail.message);
+                    if (fallbackCube) {
                         fallbackCube.setAttribute('visible', 'true');
-                    });
-                } catch (error) {
-                    console.error('Error setting model:', error);
+                    }
+                    // Remove event listener to prevent multiple calls
+                    menuEntity.removeEventListener('model-error', modelErrorHandler);
+                });
+            } catch (error) {
+                log('Error setting model: ' + error.message);
+                if (fallbackCube) {
                     fallbackCube.setAttribute('visible', 'true');
                 }
-                
-                // Listen for marker found/lost events
-                menuMarker.addEventListener('markerFound', function() {
-                    console.log('Menu marker found');
-                    markerVisible = true;
-                    infoBox.textContent = 'Menu detected! Displaying 3D model';
-                    infoBox.style.backgroundColor = 'rgba(0, 128, 0, 0.7)';
-                });
-                
-                menuMarker.addEventListener('markerLost', function() {
-                    console.log('Menu marker lost');
-                    markerVisible = false;
-                    infoBox.textContent = 'Marker lost. Please point at the marker again';
-                    infoBox.style.backgroundColor = 'rgba(128, 0, 0, 0.7)';
-                });
-            });
-            
-            // Switch between different models
-            switchModelBtn.addEventListener('click', function() {
-                currentModelIndex = (currentModelIndex + 1) % models.length;
-                if (menuModel) {
-                    menuModel.setAttribute('gltf-model', models[currentModelIndex]);
-                    console.log('Switched to model: ' + models[currentModelIndex]);
-                    
-                    // Show temporary notification
-                    infoBox.textContent = 'Switched to new model';
-                    setTimeout(() => {
-                        if (markerVisible) {
-                            infoBox.textContent = 'Menu detected! Displaying 3D model';
-                        } else {
-                            infoBox.textContent = 'Point your camera at the marker';
-                        }
-                    }, 2000);
-                }
-            });
-            
-            // Reset model position and rotation
-            resetBtn.addEventListener('click', function() {
-                if (menuModel) {
-                    menuModel.setAttribute('position', '0 0.5 0');
-                    menuModel.setAttribute('rotation', '0 0 0');
-                    console.log('Reset model position and rotation');
-                    
-                    // Show temporary notification
-                    infoBox.textContent = 'Model position reset';
-                    setTimeout(() => {
-                        if (markerVisible) {
-                            infoBox.textContent = 'Menu detected! Displaying 3D model';
-                        } else {
-                            infoBox.textContent = 'Point your camera at the marker';
-                        }
-                    }, 2000);
-                }
-            });
+            }
+        }
+        
+        // Switch between models
+        switchModelBtn.addEventListener('click', function() {
+            currentModelIndex = (currentModelIndex + 1) % models.length;
+            log('Switching to model: ' + models[currentModelIndex]);
+            loadModel(models[currentModelIndex]);
+        });
+        
+        // Reset model position
+        resetBtn.addEventListener('click', function() {
+            if (menuEntity) {
+                menuEntity.setAttribute('position', '0 0.5 0');
+                menuEntity.setAttribute('rotation', '0 0 0');
+                log('Reset model position and rotation');
+            }
         });
     </script>
 </body>

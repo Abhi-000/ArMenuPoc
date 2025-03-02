@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Menu AR Marker Tracking</title>
+    <title>Working AR Marker Tracking</title>
     <style>
         body {
             margin: 0;
@@ -62,12 +62,31 @@
             font-family: Arial, sans-serif;
             display: none;
         }
+        #marker-select {
+            position: fixed;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            padding: 8px 15px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: 1px solid white;
+            border-radius: 5px;
+            display: none;
+        }
     </style>
 </head>
 <body>
     <button id="cameraButton">Start Camera</button>
-    <div id="status">Searching for menu marker...</div>
+    <div id="status">Searching for marker...</div>
     <div id="debug">Debug info will appear here</div>
+    
+    <select id="marker-select">
+        <option value="hiro">Hiro Marker (Recommended)</option>
+        <option value="kanji">Kanji Marker</option>
+        <option value="menu">Custom Menu Marker</option>
+    </select>
     
     <div id="ui-container">
         <button class="ui-button" id="switchModelBtn">Switch Model</button>
@@ -83,16 +102,18 @@
         const statusEl = document.getElementById('status');
         const switchModelBtn = document.getElementById('switchModelBtn');
         const resetBtn = document.getElementById('resetBtn');
+        const markerSelect = document.getElementById('marker-select');
         
         let arScriptLoaded = false;
         let currentModelIndex = 0;
         let menuEntity = null;
+        let currentMarker = 'hiro'; // Start with Hiro marker
         
         // Available 3D models to cycle through
         const models = [
-            './Models/scene.gltf',
-            './Models/dish1.glb', 
-            './Models/dish2.glb'
+            'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF/Duck.gltf', // Default model that's publicly available
+            'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxAnimated/glTF/BoxAnimated.gltf',
+            'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF/BrainStem.gltf'
         ];
         
         // Log to screen and console
@@ -145,6 +166,21 @@
         function setupAR() {
             log('AR.js loaded. Setting up AR scene...');
             
+            // Show marker selector
+            markerSelect.style.display = 'block';
+            markerSelect.addEventListener('change', function() {
+                currentMarker = this.value;
+                log('Switching to ' + currentMarker + ' marker');
+                recreateARScene();
+            });
+            
+            // Initial AR scene creation
+            recreateARScene();
+        }
+        
+        function recreateARScene() {
+            log('Creating AR scene with ' + currentMarker + ' marker...');
+            
             // Remove existing scene if any
             const existingScene = document.querySelector('a-scene');
             if (existingScene) {
@@ -156,11 +192,24 @@
             scene.setAttribute('embedded', '');
             scene.setAttribute('arjs', 'sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; patternRatio: 0.75;');
             
-            // Create a marker that uses the menu pattern file
+            // Create a marker based on selection
             const marker = document.createElement('a-marker');
-            marker.setAttribute('type', 'pattern');
-            marker.setAttribute('url', './Markers/trial.patt');
-            marker.id = 'menuMarker';
+            marker.id = 'activeMarker';
+            
+            if (currentMarker === 'hiro') {
+                marker.setAttribute('preset', 'hiro');
+                statusEl.textContent = 'Looking for Hiro marker';
+                log('Using Hiro marker - https://jeromeetienne.github.io/AR.js/data/images/HIRO.jpg');
+            } else if (currentMarker === 'kanji') {
+                marker.setAttribute('preset', 'kanji');
+                statusEl.textContent = 'Looking for Kanji marker';
+                log('Using Kanji marker - https://jeromeetienne.github.io/AR.js/data/images/KANJI.jpg');
+            } else if (currentMarker === 'menu') {
+                marker.setAttribute('type', 'pattern');
+                marker.setAttribute('url', './Markers/pattern-trialMenu3.patt');
+                statusEl.textContent = 'Looking for Menu marker';
+                log('Using custom Menu marker. Make sure menu.patt exists in markers folder');
+            }
             
             // Add a fallback cube that will show immediately when marker is detected
             const cube = document.createElement('a-box');
@@ -197,8 +246,8 @@
             
             // Setup event listeners for marker
             marker.addEventListener('markerFound', function() {
-                log('Menu marker detected!');
-                statusEl.textContent = 'Menu marker detected!';
+                log(currentMarker + ' marker detected!');
+                statusEl.textContent = currentMarker + ' marker detected!';
                 statusEl.style.backgroundColor = 'rgba(0, 128, 0, 0.7)';
                 
                 // Try to load the model if not already loaded
@@ -208,12 +257,12 @@
             });
             
             marker.addEventListener('markerLost', function() {
-                log('Menu marker lost!');
-                statusEl.textContent = 'Searching for menu marker...';
+                log(currentMarker + ' marker lost!');
+                statusEl.textContent = 'Searching for ' + currentMarker + ' marker...';
                 statusEl.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
             });
             
-            log('AR scene created. Look for your menu marker.');
+            log('AR scene created. Look for the ' + currentMarker + ' marker.');
             cameraButton.style.display = 'none';
             
             // Load the initial model
@@ -246,7 +295,7 @@
                 
                 // Handle model load error
                 menuEntity.addEventListener('model-error', function modelErrorHandler(e) {
-                    log('Error loading model: ' + e.detail.message);
+                    log('Error loading model: ' + (e.detail ? e.detail.message : 'Unknown error'));
                     if (fallbackCube) {
                         fallbackCube.setAttribute('visible', 'true');
                     }

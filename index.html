@@ -90,9 +90,9 @@
         
         // Available 3D models to cycle through
         const models = [
-            './models/scene.gltf',
-            './models/dish1.glb', 
-            './models/dish2.glb'
+            './Models/scene.gltf',
+            './Models/dish1.glb', 
+            './Models/dish2.glb'
         ];
         
         // Log to screen and console
@@ -159,7 +159,7 @@
             // Create a marker that uses the menu pattern file
             const marker = document.createElement('a-marker');
             marker.setAttribute('type', 'pattern');
-            marker.setAttribute('url', './markers/pattern-trialMenu3.patt');
+            marker.setAttribute('url', './Markers/pattern-trialMenu2.patt');
             marker.id = 'menuMarker';
             
             // Add a fallback cube that will show immediately when marker is detected
